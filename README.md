@@ -7,14 +7,19 @@ Type less with automatic type inference for Python!  Inject function return type
 ## FastAPI Example
 
 ```python
+class User:
+    id: int
+    first: str
+    last: str
+
 @app.get("/user/me")
-def user_me():
+def user_me(user: User):
     return {
-        "id": 1,
+        "id": user.id,
         "balance": 13.37,
         "name": {
-            "first": "Testy",
-            "last": "McTestFace",
+            "first": user.first,
+            "last": user.last,
         },
     }
 ```
@@ -27,8 +32,8 @@ class UserMeReturnName(TypedDict):
     last: str
 
 class UserMeReturn(TypedDict):
-    id: str
-    balance: str
+    id: int
+    balance: Literal[13.37]
     name: UserMeReturnName
 ```
 
