@@ -132,8 +132,6 @@ def _resolve_annotation(
         if type_name in __builtins__:
             return __builtins__[type_name]
 
-        print(annotation.id)
-
         # Otherwise check if it's imported
         return _get_module_type(func, type_name)
 
@@ -178,7 +176,6 @@ def _resolve_annotation(
                 return Union
 
     # Fallback for unresolved or complex annotations
-    print("FAIL3")
     return Any
 
 
@@ -292,11 +289,8 @@ def _infer_expr_type(
     elif isinstance(node, ast.Attribute):
         # Handle attribute access (e.g., obj.attr)
         if isinstance(node.value, ast.Name) and node.value.id in symbol_table:
-            print(f"TRYYYY {node.value.id}")
             # Get the type of the object
             obj_type = symbol_table[node.value.id]
-            print(obj_type)
-            print(type(obj_type))
             
             # If the object has type annotations, try to get the attribute type
             if hasattr(obj_type, "__annotations__") and node.attr in obj_type.__annotations__:
@@ -313,13 +307,9 @@ def _infer_expr_type(
                     return type(attr_value)
         
         # For other attribute access, default to Any
-        print("FAIL3,5")
         return Any
 
     # Default for complex or unknown expressions
-    print("FAIL4")
-    print(node)
-    print(type(node))
     return Any
 
 
