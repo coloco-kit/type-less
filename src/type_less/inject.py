@@ -3,7 +3,7 @@ from functools import wraps
 from typing import Callable, TypeVar
 
 
-def fill_type_hints(func: Callable, use_literals=False):
+def fill_type_hints(func: Callable, use_literals=True):
     if not getattr(func, "__annotations__", None):
         func.__annotations__ = {}
 
@@ -12,7 +12,7 @@ def fill_type_hints(func: Callable, use_literals=False):
 
 
 T = TypeVar("T")
-def fastapi_app_inject_types(app: T, use_literals=False) -> T:
+def fastapi_app_inject_types(app: T, use_literals=True) -> T:
     """
     Auto-injects return types into FastAPI untyped routes.
 
