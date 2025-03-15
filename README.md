@@ -32,7 +32,7 @@ class UserMeReturn(TypedDict):
 
 📋 OpenAPI Spec:
 
-![OpenAPI Example](docs/example.png "OpenAPI Example"){height=170}
+<img src="docs/example.png" alt="OpenAPI Example" height="170">
 
 ## Using in FastAPI Project
 
