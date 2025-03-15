@@ -1,8 +1,8 @@
 ![Type-Less PyPI](https://img.shields.io/pypi/v/type-less)
 
-# Type-less
+# Type Less
 
-Type less with automatic type inference for Python!  Inject function return types at runtime for code generation.
+Find yourself typing less with automatic type inference for Python!  Inject function return types at runtime for code generation 🤙.
 
 ## FastAPI Example
 
