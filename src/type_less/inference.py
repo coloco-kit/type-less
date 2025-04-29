@@ -24,14 +24,28 @@ def _sanitize_name(name: str) -> str:
 
 
 def _get_module_type(func: Callable, name: str) -> Type:
-    # TODO: support types not at the root
+    # Split the name by dots to handle nested attributes
+    parts = name.split('.')
+    if not parts:
+        return Any
+
+    # Get the base module
     module = sys.modules.get(func.__module__, None)
-    if hasattr(module, name):
-        result = getattr(module, name)
-        if isinstance(result, type) or result.__module__ == "typing":
-            return result
-        elif isinstance(result, Callable):
-            return guess_return_type(result)
+    if not module:
+        return Any
+
+    # Start with the base module
+    current = module
+    for part in parts:
+        if not hasattr(current, part):
+            return Any
+        current = getattr(current, part)
+
+    # Check the final result
+    if isinstance(current, type) or getattr(current, '__module__', None) == "typing":
+        return current
+    elif isinstance(current, Callable):
+        return guess_return_type(current)
 
     return Any
 
@@ -83,7 +97,6 @@ def guess_return_type(func: Callable, use_literals=True) -> Type:
         if isinstance(node, ast.Return) and node.value:
             return_type = _infer_expr_type(node.value, symbol_table, func, [], use_literals)
             return_types.append(return_type)
-
     # If we found return statements
     if return_types:
         if len(return_types) == 1:
@@ -236,8 +249,14 @@ def _infer_expr_type(
 
     elif isinstance(node, ast.Call):
         # Handle function calls - this is complex, so we'll use a simplified approach
+
+        # Handle module function calls
+        if isinstance(node.func, ast.Attribute):
+            return _get_module_type(func, f"{node.func.value.id}.{node.func.attr}")
+
         if isinstance(node.func, ast.Name):
             func_name = node.func.id
+
             # Handle some common built-in functions
             if func_name == "int":
                 return int
@@ -255,7 +274,7 @@ def _infer_expr_type(
                 return Tuple
 
             return _get_module_type(func, func_name)
-
+            
         # For other function calls, we default to Any
         return Any
 
