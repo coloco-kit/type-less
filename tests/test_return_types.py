@@ -136,3 +136,59 @@ def test_guess_return_type_follow_class_members():
         }
     
     assert is_equivalent_type(guess_return_type(func, use_literals=True), TheCatReturns)
+
+
+def get_cats_list() -> list[TestCat]:
+    return [TestCat(color="black", has_ears=True)]
+
+def test_guess_return_type_follow_function_return_list_item():
+    class TheCatReturns(TypedDict):
+        color: Literal["black", "orange"]
+        has_ears: bool
+
+    def func():
+        cat = get_cats_list()[0]
+        return {
+            "color": cat.color,
+            "has_ears": cat.has_ears,
+        }
+    
+    assert is_equivalent_type(guess_return_type(func, use_literals=True), TheCatReturns)
+
+
+
+def get_cats_dict() -> dict[str, TestCat]:
+    return {"base": TestCat(color="black", has_ears=True)}
+
+def test_guess_return_type_follow_function_return_dict_item():
+    class TheCatReturns(TypedDict):
+        color: Literal["black", "orange"]
+        has_ears: bool
+
+    def func():
+        cat = get_cats_dict()["base"]
+        return {
+            "color": cat.color,
+            "has_ears": cat.has_ears,
+        }
+    
+    assert is_equivalent_type(guess_return_type(func, use_literals=True), TheCatReturns)
+
+
+
+def get_cats_dict_list() -> dict[str, list[TestCat]]:
+    return {"base": [TestCat(color="black", has_ears=True)]}
+
+def test_guess_return_type_follow_function_return_dict_list_item():
+    class TheCatReturns(TypedDict):
+        color: Literal["black", "orange"]
+        has_ears: bool
+
+    def func():
+        cat = get_cats_dict_list()["base"][0]
+        return {
+            "color": cat.color,
+            "has_ears": cat.has_ears,
+        }
+    
+    assert is_equivalent_type(guess_return_type(func, use_literals=True), TheCatReturns)
