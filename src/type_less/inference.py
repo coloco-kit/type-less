@@ -185,6 +185,15 @@ def _resolve_annotation(
                     ]
                     return Union[tuple(elem_types)]
                 return Union
+            elif base_type == "Literal":
+                if isinstance(annotation.slice, ast.Tuple):
+                    values = []
+                    for elt in annotation.slice.elts:
+                        if isinstance(elt, ast.Constant):
+                            values.append(elt.value)
+                    return Literal[tuple(values)]
+                elif isinstance(annotation.slice, ast.Constant):
+                    return Literal[annotation.slice.value]
 
     # Fallback for unresolved or complex annotations
     return Any

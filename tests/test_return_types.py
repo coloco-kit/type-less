@@ -63,12 +63,20 @@ def test_guess_return_type_none():
 
 
 TestLiteralType = Literal["test1", "test2"]
-def test_guess_return_type_literal():
+def test_guess_return_type_root_literal():
     def func():
         literally_something: TestLiteralType = "test1"
         return literally_something
     
     assert guess_return_type(func, use_literals=False) == TestLiteralType
+
+
+def test_guess_return_type_inline_literal():
+    def func():
+        literally_something: Literal["test1", "test2"] = "test1"
+        return literally_something
+    
+    assert guess_return_type(func, use_literals=False) == Literal["test1", "test2"]
 
 
 def test_guess_return_type_multiple_returns():
