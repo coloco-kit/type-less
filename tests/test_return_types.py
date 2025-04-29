@@ -1,7 +1,8 @@
 import pytest
+from .external import Dog, get_dog, get_dog_with_input, LiteralType
+from .matching import is_equivalent_type
 from type_less.inference import guess_return_type
 from typing import TypedDict, Literal, Union
-from .matching import is_equivalent_type
 
 
 def test_guess_return_type_dict():
@@ -138,6 +139,7 @@ def test_guess_return_type_follow_class_members():
     
     assert is_equivalent_type(guess_return_type(func, use_literals=True), TheCatReturns)
 
+# Subscript
 
 def get_cats_list() -> list[TestCat]:
     return [TestCat(color="black", has_ears=True)]
@@ -194,7 +196,7 @@ def test_guess_return_type_follow_function_return_dict_list_item():
     
     assert is_equivalent_type(guess_return_type(func, use_literals=True), TheCatReturns)
 
-
+# Async
 
 async def get_cat_async() -> TestCat:
     return TestCat(color="black", has_ears=True)
@@ -213,3 +215,32 @@ async def test_guess_return_type_follow_function_return_async():
         }
     
     assert is_equivalent_type(guess_return_type(func, use_literals=True), TheCatReturns)
+
+# Imported
+
+
+def test_guess_return_type_imported_function():
+    assert is_equivalent_type(guess_return_type(get_dog, use_literals=True), Dog)
+
+def test_guess_return_type_called_imported_function():
+    class TheDogReturns(TypedDict):
+        dog: Dog
+
+    def func():
+        dog = get_dog()
+        return {
+            "dog": dog,
+        }
+    
+    assert is_equivalent_type(guess_return_type(func, use_literals=True), TheDogReturns)
+
+def test_guess_return_type_imported_function_args():
+    class TheDogReturns(TypedDict):
+        input: LiteralType
+        dog: Dog
+
+    def func():
+        dog = get_dog_with_input("test1")
+        return dog
+    
+    assert is_equivalent_type(guess_return_type(func, use_literals=True), TheDogReturns)
