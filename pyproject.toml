@@ -1,6 +1,6 @@
 [project]
 name = "type-less"
-version = "0.1.5"
+version = "0.1.6"
 description = "Type less types with inferred return types"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -19,4 +19,5 @@ addopts = [
 dev = [
     "fastapi>=0.115.11",
     "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
 ]

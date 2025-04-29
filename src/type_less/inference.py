@@ -308,21 +308,25 @@ def _infer_expr_type(
         
         # For other attribute access, default to Any
         return Any
-
+    
     elif isinstance(node, ast.Subscript):
         # Handle indexing operations (e.g., list[0], dict["key"])
         value_type = _infer_expr_type(node.value, symbol_table, func, nested_path, use_literals)
-        
+
         # If the value is a list, get its element type
         if hasattr(value_type, "__origin__") and value_type.__origin__ is list:
             return value_type.__args__[0]
-        
+
         # If the value is a dict, get its value type
         if hasattr(value_type, "__origin__") and value_type.__origin__ is dict:
             return value_type.__args__[1]
-        
+
         # For other types, return Any
         return Any
+        
+    elif isinstance(node, ast.Await):
+        # Handle await expressions by inferring the type of the awaited value
+        return _infer_expr_type(node.value, symbol_table, func, nested_path, use_literals)
 
     # Default for complex or unknown expressions
     return Any

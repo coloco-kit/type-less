@@ -1,3 +1,4 @@
+import pytest
 from type_less.inference import guess_return_type
 from typing import TypedDict, Literal, Union
 from .matching import is_equivalent_type
@@ -186,6 +187,26 @@ def test_guess_return_type_follow_function_return_dict_list_item():
 
     def func():
         cat = get_cats_dict_list()["base"][0]
+        return {
+            "color": cat.color,
+            "has_ears": cat.has_ears,
+        }
+    
+    assert is_equivalent_type(guess_return_type(func, use_literals=True), TheCatReturns)
+
+
+
+async def get_cat_async() -> TestCat:
+    return TestCat(color="black", has_ears=True)
+
+@pytest.mark.asyncio
+async def test_guess_return_type_follow_function_return_async():
+    class TheCatReturns(TypedDict):
+        color: Literal["black", "orange"]
+        has_ears: bool
+
+    async def func():
+        cat = await get_cat_async()
         return {
             "color": cat.color,
             "has_ears": cat.has_ears,
