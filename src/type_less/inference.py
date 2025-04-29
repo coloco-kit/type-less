@@ -1,6 +1,7 @@
 from __future__ import annotations
 import ast
 import inspect
+import sys
 from typing import (
     Any,
     Callable,
@@ -14,7 +15,6 @@ from typing import (
 )
 import textwrap
 
-
 def _snake_case_to_capital_case(name: str) -> str:
     return "".join(word.capitalize() for word in name.split("_"))
 
@@ -24,13 +24,11 @@ def _sanitize_name(name: str) -> str:
 
 
 def _get_module_type(func: Callable, name: str) -> Type:
-    import sys
-
     # TODO: support types not at the root
     module = sys.modules.get(func.__module__, None)
     if hasattr(module, name):
         result = getattr(module, name)
-        if isinstance(result, type):
+        if isinstance(result, type) or result.__module__ == "typing":
             return result
         elif isinstance(result, Callable):
             return guess_return_type(result)

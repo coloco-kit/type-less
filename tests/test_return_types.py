@@ -1,5 +1,6 @@
 import pytest
 from .external import Dog, get_dog, get_dog_with_input, LiteralType
+from . import external
 from .matching import is_equivalent_type
 from type_less.inference import guess_return_type
 from typing import TypedDict, Literal, Union
@@ -59,6 +60,15 @@ def test_guess_return_type_none():
         return None
     
     assert guess_return_type(func, use_literals=False) == type(None)
+
+
+TestLiteralType = Literal["test1", "test2"]
+def test_guess_return_type_literal():
+    def func():
+        literally_something: TestLiteralType = "test1"
+        return literally_something
+    
+    assert guess_return_type(func, use_literals=False) == TestLiteralType
 
 
 def test_guess_return_type_multiple_returns():
@@ -244,3 +254,15 @@ def test_guess_return_type_imported_function_args():
         return dog
     
     assert is_equivalent_type(guess_return_type(func, use_literals=True), TheDogReturns)
+
+def test_guess_return_type_imported_module_function_args():
+    class TheDogReturns(TypedDict):
+        input: LiteralType
+        dog: Dog
+
+    def func():
+        dog = external.get_dog_with_input("test1")
+        return dog
+    
+    assert is_equivalent_type(guess_return_type(func, use_literals=True), TheDogReturns)
+
