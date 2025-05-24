@@ -191,9 +191,9 @@ def _resolve_annotation(
                     for elt in annotation.slice.elts:
                         if isinstance(elt, ast.Constant):
                             values.append(elt.value)
-                    return Literal[tuple(values)]
+                    return Literal[tuple(values)] # type: ignore
                 elif isinstance(annotation.slice, ast.Constant):
-                    return Literal[annotation.slice.value]
+                    return Literal[annotation.slice.value] # type: ignore
 
     # Fallback for unresolved or complex annotations
     return Any
@@ -241,7 +241,7 @@ def _infer_expr_type(
     elif isinstance(node, ast.Constant):
         # Handle literals
         if use_literals:
-            return Literal[node.value]
+            return Literal[node.value] # type: ignore
         else:
             return type(node.value)
 

@@ -62,4 +62,7 @@ def test(request):
  * Nested class inference
  * Deep function call / return inference
 ### Better Way?:
- * Possibly use pyre, mypy, or anything else to infer the type?
+ * Possibly use pyright, pyre, mypy, or anything else to infer the type?
+   * Tracking [pyright request](https://github.com/microsoft/pyright/issues/10394) - DENIED
+### Cleanup:
+ * Possibly refactor - a large portion of the initial work was codegen from claude and has patterns that need rethinking of proper documentation
