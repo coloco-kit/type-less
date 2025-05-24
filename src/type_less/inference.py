@@ -184,6 +184,20 @@ def _resolve_annotation(
         # Otherwise check if it's imported
         return _get_module_type(func, type_name)
 
+    elif isinstance(annotation, ast.Constant) and isinstance(annotation.value, str):
+        # Handle string literal type names
+        type_name = annotation.value
+        # Check Python's built-in types first
+        if type_name in __builtins__:
+            return __builtins__[type_name]
+
+        # Check if it's a TypeVar
+        if type_name in type_context:
+            return type_context[type_name]
+
+        # Otherwise check if it's imported
+        return _get_module_type(func, type_name)
+
     elif isinstance(annotation, ast.Subscript):
         # Handle generic types like list[int], dict[str, int], etc.
         if isinstance(annotation.value, ast.Name):
@@ -250,40 +264,52 @@ def _get_function_definition(func_name: str, func: Callable) -> Optional[Callabl
     return getattr(module, func_name, None)
 
 
+def _resolve_str_type(type_candidate, func):
+    # Helper to resolve string type names to actual types
+    if isinstance(type_candidate, str):
+        return _get_module_type(func, type_candidate)
+    return type_candidate
+
+
 def _infer_expr_type(
     node: ast.AST, symbol_table: dict[str, Type], func: Callable, nested_path: list[str], use_literals: bool
 ) -> Type:
     """Infer the type of an expression"""
     if isinstance(node, ast.Dict):
-        # For dictionary literals, create a TypedDict
         return _create_typed_dict_from_dict(node, symbol_table, func, nested_path, use_literals)
 
     elif isinstance(node, ast.List):
-        # Handle list literals
         if not node.elts:
             return list[Any]
         element_types = [
             _infer_expr_type(elt, symbol_table, func, nested_path, use_literals) for elt in node.elts
+        ]
+        element_types = [
+            _resolve_str_type(t, func) for t in element_types
         ]
         if len(set(element_types)) == 1:
             return list[element_types[0]]
         return list[Union[tuple(set(element_types))]]
 
     elif isinstance(node, ast.Tuple):
-        # Handle tuple literals
         if not node.elts:
             return tuple[()]
         element_types = [
             _infer_expr_type(elt, symbol_table, func, nested_path, use_literals) for elt in node.elts
         ]
+        element_types = [
+            _resolve_str_type(t, func) for t in element_types
+        ]
         return tuple[tuple(element_types)]
 
     elif isinstance(node, ast.Set):
-        # Handle set literals
         if not node.elts:
             return set[Any]
         element_types = [
             _infer_expr_type(elt, symbol_table, func, nested_path, use_literals) for elt in node.elts
+        ]
+        element_types = [
+            _resolve_str_type(t, func) for t in element_types
         ]
         if len(set(element_types)) == 1:
             return set[element_types[0]]
@@ -447,18 +473,14 @@ def _infer_expr_type(
         return Any
     
     elif isinstance(node, ast.Subscript):
-        # Handle indexing operations (e.g., list[0], dict["key"])
         value_type = _infer_expr_type(node.value, symbol_table, func, nested_path, use_literals)
-
+        value_type = _resolve_str_type(value_type, func)
         # If the value is a list, get its element type
         if hasattr(value_type, "__origin__") and value_type.__origin__ is list:
-            return value_type.__args__[0]
-
+            return _resolve_str_type(value_type.__args__[0], func)
         # If the value is a dict, get its value type
         if hasattr(value_type, "__origin__") and value_type.__origin__ is dict:
-            return value_type.__args__[1]
-
-        # For other types, return Any
+            return _resolve_str_type(value_type.__args__[1], func)
         return Any
         
     elif isinstance(node, ast.Await):

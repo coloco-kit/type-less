@@ -178,7 +178,11 @@ def validate_is_equivalent_type(type1, type2):
             validate_is_equivalent_type(arg1, arg2)
         except AssertionError as e:
             raise AssertionError(f"Generic argument {i} mismatch in {type1} vs {type2}: {e}")
-    return True
+    
+    if not type1 == type2:
+        raise AssertionError(f"Type mismatch: {type1} vs {type2}")
+
+    return type1 == type2
 
 
 

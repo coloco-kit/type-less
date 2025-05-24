@@ -16,3 +16,8 @@ def get_dog_with_input(input_literal: LiteralType):
         "input": input_literal,
         "dog": get_dog(),
     }
+
+class Donkey:
+    @staticmethod
+    def get_by_saddle(size: int) -> "Donkey":
+        return Donkey()

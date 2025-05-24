@@ -1,4 +1,4 @@
-from ..external import Dog, get_dog, get_dog_with_input, LiteralType
+from ..external import Dog, Donkey, get_dog, get_dog_with_input, LiteralType
 from .. import external
 from ..matching import validate_is_equivalent_type
 from type_less.inference import guess_return_type
@@ -45,3 +45,11 @@ def test_guess_return_type_imported_module_function_args():
     
     assert validate_is_equivalent_type(guess_return_type(func), TheDogReturns)
 
+
+def test_external_static_method_quoted_type():
+    def func():
+        donkey = Donkey.get_by_saddle(10)
+        return donkey
+    
+    assert validate_is_equivalent_type(guess_return_type(func), Donkey)
+    
