@@ -1,4 +1,4 @@
-from ..matching import is_equivalent_type
+from ..matching import validate_is_equivalent_type
 from type_less.inference import guess_return_type
 from typing import Awaitable, Literal, TypedDict, Type, TypeVar, Union
 
@@ -96,7 +96,7 @@ def test_guess_return_type_dict():
         name: str
         age: int
 
-    assert is_equivalent_type(guess_return_type(func, use_literals=False), FuncReturn)
+    assert validate_is_equivalent_type(guess_return_type(func, use_literals=False), FuncReturn)
 
 
 def test_guess_return_type_complex_fuzzy():
@@ -115,7 +115,7 @@ def test_guess_return_type_complex_fuzzy():
     class FuncReturn3(TypedDict):
         result: str
 
-    assert is_equivalent_type(guess_return_type(func, use_literals=False), Union[FuncReturn1, FuncReturn2, FuncReturn3])
+    assert validate_is_equivalent_type(guess_return_type(func, use_literals=False), Union[FuncReturn1, FuncReturn2, FuncReturn3])
 
 
 def test_guess_return_type_complex_literals():
@@ -134,7 +134,7 @@ def test_guess_return_type_complex_literals():
     class FuncReturn3(TypedDict):
         result: Literal["negative"]
 
-    assert is_equivalent_type(guess_return_type(func), Union[FuncReturn1, FuncReturn2, FuncReturn3])
+    assert validate_is_equivalent_type(guess_return_type(func), Union[FuncReturn1, FuncReturn2, FuncReturn3])
 
 
 class TestCat:
@@ -152,4 +152,4 @@ def test_guess_return_type_follow_class_members():
             "has_ears": cat.has_ears,
         }
     
-    assert is_equivalent_type(guess_return_type(func), TheCatReturns)
+    assert validate_is_equivalent_type(guess_return_type(func), TheCatReturns)

@@ -1,4 +1,4 @@
-from ..matching import is_equivalent_type
+from ..matching import validate_is_equivalent_type
 from type_less.inference import guess_return_type
 from typing import Literal, TypedDict
 
@@ -25,7 +25,7 @@ def test_guess_return_type_follow_function_return_list_item():
             "has_ears": cat.has_ears,
         }
     
-    assert is_equivalent_type(guess_return_type(func), TheCatReturns)
+    assert validate_is_equivalent_type(guess_return_type(func), TheCatReturns)
 
 
 
@@ -44,7 +44,7 @@ def test_guess_return_type_follow_function_return_dict_item():
             "has_ears": cat.has_ears,
         }
     
-    assert is_equivalent_type(guess_return_type(func), TheCatReturns)
+    assert validate_is_equivalent_type(guess_return_type(func), TheCatReturns)
 
 
 
@@ -63,4 +63,4 @@ def test_guess_return_type_follow_function_return_dict_list_item():
             "has_ears": cat.has_ears,
         }
     
-    assert is_equivalent_type(guess_return_type(func), TheCatReturns)
+    assert validate_is_equivalent_type(guess_return_type(func), TheCatReturns)

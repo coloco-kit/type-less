@@ -1,7 +1,7 @@
 from typing import get_type_hints, get_origin, get_args, Literal, TypeVar, Union
 import types
 
-def is_equivalent_type(type1, type2):
+def validate_is_equivalent_type(type1, type2):
     """
     Determine if two Python types are equivalent, handling complex nested types.
     
@@ -19,8 +19,8 @@ def is_equivalent_type(type1, type2):
         type1: First type to compare
         type2: Second type to compare
         
-    Returns:
-        bool: True if types are equivalent, False otherwise
+    Raises:
+        AssertionError: If types are not equivalent, with detailed debug information
     """
     # Handle None type
     if type1 is None and type2 is None:
@@ -36,7 +36,7 @@ def is_equivalent_type(type1, type2):
     
     # If one has origin and other doesn't, they're not equivalent
     if (origin1 is None) != (origin2 is None):
-        return False
+        raise AssertionError(f"Type origins don't match: {type1} (origin={origin1}) vs {type2} (origin={origin2})")
     
     # Special case for Optional and Union
     if {origin1, origin2} <= {Union, types.UnionType}:
@@ -49,24 +49,27 @@ def is_equivalent_type(type1, type2):
         has_none2 = type(None) in args2
         
         if has_none1 != has_none2:
-            return False
+            raise AssertionError(f"Optional mismatch: {type1} (has_none={has_none1}) vs {type2} (has_none={has_none2})")
             
         # Compare non-None args
         non_none_args1 = [arg for arg in args1 if arg is not type(None)]
         non_none_args2 = [arg for arg in args2 if arg is not type(None)]
         
         if len(non_none_args1) != len(non_none_args2):
-            return False
+            raise AssertionError(f"Union argument count mismatch: {type1} ({len(non_none_args1)} args) vs {type2} ({len(non_none_args2)} args)")
             
         # For Union, order doesn't matter
         args2_remaining = set(non_none_args2)
         for arg1 in non_none_args1:
             for arg2 in args2_remaining:
-                if is_equivalent_type(arg1, arg2):
-                    args2_remaining.remove(arg2)
-                    break
+                try:
+                    if validate_is_equivalent_type(arg1, arg2):
+                        args2_remaining.remove(arg2)
+                        break
+                except AssertionError as e:
+                    continue
             else:
-                return False
+                raise AssertionError(f"Union argument mismatch: {arg1} in {type1} has no matching type in {type2}")
         return True
     
     # Get arguments of generic types
@@ -75,7 +78,7 @@ def is_equivalent_type(type1, type2):
     
     # If number of args differs, types are not equivalent
     if len(args1) != len(args2):
-        return False
+        raise AssertionError(f"Generic argument count mismatch: {type1} ({len(args1)} args) vs {type2} ({len(args2)} args)")
     
     # Special handling for TypedDict
     if hasattr(type1, "__annotations__") and hasattr(type2, "__annotations__"):
@@ -83,7 +86,7 @@ def is_equivalent_type(type1, type2):
         if hasattr(type1, "__total__") and hasattr(type2, "__total__"):
             # Check if totality is the same
             if type1.__total__ != type2.__total__:
-                return False
+                raise AssertionError(f"TypedDict totality mismatch: {type1} (total={type1.__total__}) vs {type2} (total={type2.__total__})")
             
             # Get annotations
             annotations1 = get_type_hints(type1)
@@ -91,15 +94,24 @@ def is_equivalent_type(type1, type2):
             
             # Check if keys match
             if set(annotations1.keys()) != set(annotations2.keys()):
-                return False
+                missing_keys = set(annotations1.keys()) - set(annotations2.keys())
+                extra_keys = set(annotations2.keys()) - set(annotations1.keys())
+                raise AssertionError(f"TypedDict key mismatch: {type1} vs {type2}\nMissing keys: {missing_keys}\nExtra keys: {extra_keys}")
             
             # Check if field types match
-            return all(is_equivalent_type(annotations1[key], annotations2[key]) for key in annotations1)
+            for key in annotations1:
+                try:
+                    validate_is_equivalent_type(annotations1[key], annotations2[key])
+                except AssertionError as e:
+                    raise AssertionError(f"TypedDict field type mismatch for key '{key}': {e}")
+            return True
     
     # Handle Literal
     if origin1 is Literal and origin2 is Literal:
         # For Literal, order doesn't matter but values must be identical
-        return set(args1) == set(args2)
+        if set(args1) != set(args2):
+            raise AssertionError(f"Literal value mismatch: {type1} ({set(args1)}) vs {type2} ({set(args2)})")
+        return True
     
     # Handle Callable
     if origin1 in {types.FunctionType, callable} and origin2 in {types.FunctionType, callable}:
@@ -107,7 +119,7 @@ def is_equivalent_type(type1, type2):
             return True  # Callable without specified signature
         
         if len(args1) != 2 or len(args2) != 2:
-            return False
+            raise AssertionError(f"Callable argument count mismatch: {type1} ({len(args1)} args) vs {type2} ({len(args2)} args)")
         
         # Compare parameter types
         params1, return1 = args1
@@ -115,32 +127,58 @@ def is_equivalent_type(type1, type2):
         
         # Handle Ellipsis in parameters
         if params1 is Ellipsis or params2 is Ellipsis:
-            return is_equivalent_type(return1, return2)
+            try:
+                return validate_is_equivalent_type(return1, return2)
+            except AssertionError as e:
+                raise AssertionError(f"Callable return type mismatch: {e}")
         
         # If parameter counts differ, not equivalent
         if len(params1) != len(params2):
-            return False
+            raise AssertionError(f"Callable parameter count mismatch: {type1} ({len(params1)} params) vs {type2} ({len(params2)} params)")
         
         # Check parameters and return type
-        return all(is_equivalent_type(p1, p2) for p1, p2 in zip(params1, params2)) and \
-               is_equivalent_type(return1, return2)
+        for i, (p1, p2) in enumerate(zip(params1, params2)):
+            try:
+                validate_is_equivalent_type(p1, p2)
+            except AssertionError as e:
+                raise AssertionError(f"Callable parameter {i} type mismatch: {e}")
+        
+        try:
+            validate_is_equivalent_type(return1, return2)
+        except AssertionError as e:
+            raise AssertionError(f"Callable return type mismatch: {e}")
+        return True
     
     # Handle basic types
     if origin1 is None and origin2 is None:
         if isinstance(type1, type) and isinstance(type2, type):
-            return type1 is type2 or type1 == type2
+            if type1 is not type2 and type1 != type2:
+                raise AssertionError(f"Basic type mismatch: {type1} vs {type2}")
+            return True
         
         # Handle TypeVar
         if isinstance(type1, TypeVar) and isinstance(type2, TypeVar):
-            return (type1.__name__ == type2.__name__ and 
-                    type1.__constraints__ == type2.__constraints__ and
-                    type1.__bound__ == type2.__bound__ and
-                    type1.__covariant__ == type2.__covariant__ and
-                    type1.__contravariant__ == type2.__contravariant__)
+            if not (type1.__name__ == type2.__name__ and 
+                   type1.__constraints__ == type2.__constraints__ and
+                   type1.__bound__ == type2.__bound__ and
+                   type1.__covariant__ == type2.__covariant__ and
+                   type1.__contravariant__ == type2.__contravariant__):
+                raise AssertionError(f"TypeVar mismatch: {type1} vs {type2}\n"
+                                   f"name: {type1.__name__} vs {type2.__name__}\n"
+                                   f"constraints: {type1.__constraints__} vs {type2.__constraints__}\n"
+                                   f"bound: {type1.__bound__} vs {type2.__bound__}\n"
+                                   f"covariant: {type1.__covariant__} vs {type2.__covariant__}\n"
+                                   f"contravariant: {type1.__contravariant__} vs {type2.__contravariant__}")
+            return True
     
     # For other generic types, check if all arguments are equivalent
     # For tuples, order matters
-    return all(is_equivalent_type(arg1, arg2) for arg1, arg2 in zip(args1, args2))
+    for i, (arg1, arg2) in enumerate(zip(args1, args2)):
+        try:
+            validate_is_equivalent_type(arg1, arg2)
+        except AssertionError as e:
+            raise AssertionError(f"Generic argument {i} mismatch in {type1} vs {type2}: {e}")
+    return True
 
 
 

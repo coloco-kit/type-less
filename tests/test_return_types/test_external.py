@@ -1,6 +1,6 @@
 from ..external import Dog, get_dog, get_dog_with_input, LiteralType
 from .. import external
-from ..matching import is_equivalent_type
+from ..matching import validate_is_equivalent_type
 from type_less.inference import guess_return_type
 from typing import TypedDict
 
@@ -9,7 +9,7 @@ from typing import TypedDict
 
 
 def test_guess_return_type_imported_function():
-    assert is_equivalent_type(guess_return_type(get_dog), Dog)
+    assert validate_is_equivalent_type(guess_return_type(get_dog), Dog)
 
 def test_guess_return_type_called_imported_function():
     class TheDogReturns(TypedDict):
@@ -21,7 +21,7 @@ def test_guess_return_type_called_imported_function():
             "dog": dog,
         }
     
-    assert is_equivalent_type(guess_return_type(func), TheDogReturns)
+    assert validate_is_equivalent_type(guess_return_type(func), TheDogReturns)
 
 def test_guess_return_type_imported_function_args():
     class TheDogReturns(TypedDict):
@@ -32,7 +32,7 @@ def test_guess_return_type_imported_function_args():
         dog = get_dog_with_input("test1")
         return dog
     
-    assert is_equivalent_type(guess_return_type(func), TheDogReturns)
+    assert validate_is_equivalent_type(guess_return_type(func), TheDogReturns)
 
 def test_guess_return_type_imported_module_function_args():
     class TheDogReturns(TypedDict):
@@ -43,5 +43,5 @@ def test_guess_return_type_imported_module_function_args():
         dog = external.get_dog_with_input("test1")
         return dog
     
-    assert is_equivalent_type(guess_return_type(func), TheDogReturns)
+    assert validate_is_equivalent_type(guess_return_type(func), TheDogReturns)
 

@@ -12,6 +12,9 @@ from typing import (
     TypedDict,
     Type,
     Union,
+    TypeVar,
+    get_origin,
+    get_args,
 )
 import textwrap
 
@@ -113,10 +116,16 @@ def _analyze_function_body(
     func_def: ast.FunctionDef, symbol_table: dict[str, Type], func: Callable, use_literals: bool
 ) -> None:
     """Analyze function body to populate symbol table with type information"""
-    # First gather parameter types
+    # First gather parameter types and TypeVar bindings
+    type_context = {}
     for arg in func_def.args.args:
         if arg.annotation:
-            symbol_table[arg.arg] = _resolve_annotation(arg.annotation, {}, func)
+            param_type = _resolve_annotation(arg.annotation, type_context, func)
+            symbol_table[arg.arg] = param_type
+            
+            # If the parameter type is a TypeVar, track its binding
+            if isinstance(param_type, TypeVar):
+                type_context[param_type.__name__] = param_type
 
     # Analyze assignments to track variable types
     for node in ast.walk(func_def):
@@ -128,7 +137,7 @@ def _analyze_function_body(
         elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             # Handle annotated assignments
             symbol_table[node.target.id] = _resolve_annotation(
-                node.annotation, {}, func
+                node.annotation, type_context, func
             )
 
 
@@ -142,6 +151,10 @@ def _resolve_annotation(
         # Check Python's built-in types first
         if type_name in __builtins__:
             return __builtins__[type_name]
+
+        # Check if it's a TypeVar
+        if type_name in type_context:
+            return type_context[type_name]
 
         # Otherwise check if it's imported
         return _get_module_type(func, type_name)
@@ -194,9 +207,22 @@ def _resolve_annotation(
                     return Literal[tuple(values)] # type: ignore
                 elif isinstance(annotation.slice, ast.Constant):
                     return Literal[annotation.slice.value] # type: ignore
+            elif base_type == "TypeVar":
+                # Handle TypeVar definitions
+                if isinstance(annotation.slice, ast.Constant):
+                    return TypeVar(annotation.slice.value)
+                return TypeVar
 
     # Fallback for unresolved or complex annotations
     return Any
+
+
+def _get_function_definition(func_name: str, func: Callable) -> Optional[Callable]:
+    """Get the definition of a function by name from the module"""
+    module = sys.modules.get(func.__module__, None)
+    if not module:
+        return None
+    return getattr(module, func_name, None)
 
 
 def _infer_expr_type(
@@ -257,7 +283,38 @@ def _infer_expr_type(
         return _get_module_type(func, node.id)
 
     elif isinstance(node, ast.Call):
-        # Handle function calls - this is complex, so we'll use a simplified approach
+        # Handle function calls
+        if isinstance(node.func, ast.Name):
+            func_name = node.func.id
+            
+            # First check if we have the function in our symbol table
+            if func_name in symbol_table:
+                func_type = symbol_table[func_name]
+                if hasattr(func_type, "__annotations__") and "return" in func_type.__annotations__:
+                    return_type = func_type.__annotations__["return"]
+                    # If return type is a TypeVar, try to resolve it from arguments
+                    if isinstance(return_type, TypeVar):
+                        # Look at the first argument to determine the type
+                        if node.args and isinstance(node.args[0], ast.Name):
+                            arg_name = node.args[0].id
+                            if arg_name in symbol_table:
+                                return symbol_table[arg_name]
+                        return return_type
+            
+            # If not in symbol table, try to get the function definition
+            func_def = _get_function_definition(func_name, func)
+            if func_def and hasattr(func_def, "__annotations__"):
+                if "return" in func_def.__annotations__:
+                    return_type = func_def.__annotations__["return"]
+                    if isinstance(return_type, TypeVar):
+                        # Look at the first argument to determine the type
+                        if node.args and isinstance(node.args[0], ast.Constant):
+                            return type(node.args[0].value)
+                        elif node.args and isinstance(node.args[0], ast.Name):
+                            arg_name = node.args[0].id
+                            if arg_name in symbol_table:
+                                return symbol_table[arg_name]
+                        return return_type
 
         # Handle module function calls
         if isinstance(node.func, ast.Attribute):

@@ -1,5 +1,5 @@
 import pytest
-from ..matching import is_equivalent_type
+from ..matching import validate_is_equivalent_type
 from type_less.inference import guess_return_type
 from typing import Awaitable, Literal, TypedDict, Type, TypeVar, Union
 
@@ -10,12 +10,15 @@ class Animal:
     async def create(cls: Type[MODEL]) -> MODEL:
         return cls()
     
+    
 class Cat(Animal):
     color: Literal["black", "orange"]
     has_ears: bool
     
+
 class Collar:
     cat: Awaitable[Cat]
+
 
 
 # Async
@@ -36,7 +39,7 @@ async def test_guess_return_type_follow_function_return_async():
             "has_ears": cat.has_ears,
         }
     
-    assert is_equivalent_type(guess_return_type(func), TheCatReturns)
+    assert validate_is_equivalent_type(guess_return_type(func), TheCatReturns)
 
 
 # Inherited Async
@@ -50,12 +53,12 @@ async def test_guess_return_type_follow_function_return_async_inherited():
 
     async def func():
         cat = await Cat.create()
-        return {
-            "color": cat.color,
-            "has_ears": cat.has_ears,
-        }
+        return cat
     
-    assert is_equivalent_type(guess_return_type(func), TheCatReturns)
+    print(type(guess_return_type(func)))
+    result = validate_is_equivalent_type(guess_return_type(func), TheCatReturns)
+    print(result)
+    assert False
 
 @pytest.mark.asyncio
 async def test_guess_return_type_follow_function_return_async_method():
@@ -71,5 +74,5 @@ async def test_guess_return_type_follow_function_return_async_method():
             "has_ears": cat.has_ears,
         }
     
-    assert is_equivalent_type(guess_return_type(func), TheCatReturns)
+    assert validate_is_equivalent_type(guess_return_type(func), TheCatReturns)
 
