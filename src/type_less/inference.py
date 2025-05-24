@@ -284,6 +284,27 @@ def _infer_expr_type(
 
     elif isinstance(node, ast.Call):
         # Handle function calls
+        if isinstance(node.func, ast.Attribute):
+            # Handle class method calls
+            if isinstance(node.func.value, ast.Name):
+                class_name = node.func.value.id
+                method_name = node.func.attr
+                
+                # Get the class type
+                class_type = _get_module_type(func, class_name)
+                if isinstance(class_type, type):
+                    # Get the method
+                    method = getattr(class_type, method_name, None)
+                    if method and hasattr(method, "__annotations__"):
+                        return_type = method.__annotations__.get("return")
+                        if isinstance(return_type, TypeVar):
+                            # For class methods, the TypeVar is bound to the class
+                            return class_type
+                        return return_type
+            
+            # Handle regular method calls
+            return _get_module_type(func, f"{node.func.value.id}.{node.func.attr}")
+        
         if isinstance(node.func, ast.Name):
             func_name = node.func.id
             
