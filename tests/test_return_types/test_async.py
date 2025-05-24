@@ -1,4 +1,5 @@
 import pytest
+from ..external import AsyncDonkey as Dinkey, Donkey
 from ..matching import validate_is_equivalent_type
 from type_less.inference import guess_return_type
 from typing import Awaitable, Literal, TypedDict, Type, TypeVar, Union
@@ -83,3 +84,14 @@ async def test_awaitable_member_variable():
     
     assert validate_is_equivalent_type(guess_return_type(func), Cat)
 
+
+# External
+
+
+@pytest.mark.asyncio
+async def test_external_static_method_quoted_type_renamed():
+    async def func():
+        donkey, donkey2 = await Dinkey.get_by_saddle(10)
+        return donkey, donkey2
+    
+    assert validate_is_equivalent_type(guess_return_type(func), tuple[Dinkey, Dinkey])

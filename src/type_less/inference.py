@@ -382,7 +382,8 @@ def _infer_expr_type(
                         # If return type is a string, resolve it in the method's module context
                         if isinstance(return_type, str):
                             return _get_module_type_in_context(return_type, method)
-                        return return_type
+                        # Handle complex types with quoted strings
+                        return _resolve_complex_type_in_context(return_type, method)
             
             # Handle regular method calls
             # Build the full attribute path by traversing the AST
@@ -590,3 +591,48 @@ def _create_typed_dict_from_dict(
             return dict[Union[tuple(set(key_types))], Union[tuple(set(value_types))]]
 
     return dict[Any, Any]
+
+
+def _resolve_complex_type_in_context(type_annotation: Type, context_func: Callable) -> Type:
+    """
+    Recursively resolve quoted types in complex type annotations.
+    This handles cases like tuple["AsyncDonkey", "Donkey"] where the strings
+    need to be resolved to actual types in the context where they were defined.
+    """
+    # Handle simple string types
+    if isinstance(type_annotation, str):
+        return _get_module_type_in_context(type_annotation, context_func)
+    
+    # Handle generic types (like tuple, list, etc.)
+    origin = get_origin(type_annotation)
+    if origin is not None:
+        args = get_args(type_annotation)
+        if args:
+            # Recursively resolve each argument
+            resolved_args = []
+            for arg in args:
+                if isinstance(arg, str):
+                    resolved_args.append(_get_module_type_in_context(arg, context_func))
+                else:
+                    resolved_args.append(_resolve_complex_type_in_context(arg, context_func))
+            
+            # Reconstruct the type with resolved arguments
+            if origin is tuple:
+                return tuple[tuple(resolved_args)]
+            elif origin is list:
+                return list[resolved_args[0]] if len(resolved_args) == 1 else list[Union[tuple(resolved_args)]]
+            elif origin is dict:
+                return dict[resolved_args[0], resolved_args[1]] if len(resolved_args) == 2 else dict[Any, Any]
+            elif origin is set:
+                return set[resolved_args[0]] if len(resolved_args) == 1 else set[Union[tuple(resolved_args)]]
+            elif origin is Union:
+                return Union[tuple(resolved_args)]
+            else:
+                # For other generic types, try to reconstruct
+                try:
+                    return origin[tuple(resolved_args)]
+                except (TypeError, AttributeError):
+                    return type_annotation
+    
+    # For non-generic types, return as-is
+    return type_annotation

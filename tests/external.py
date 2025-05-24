@@ -21,3 +21,8 @@ class Donkey:
     @staticmethod
     def get_by_saddle(size: int) -> "Donkey":
         return Donkey()
+    
+class AsyncDonkey:
+    @staticmethod
+    async def get_by_saddle(size: int) -> tuple["AsyncDonkey", "AsyncDonkey"]:
+        return AsyncDonkey(), AsyncDonkey()
