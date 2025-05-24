@@ -55,6 +55,38 @@ def _get_module_type(func: Callable, name: str) -> Type:
     return Any
 
 
+def _get_module_type_in_context(name: str, context_func: Callable) -> Type:
+    """
+    Resolve a type name in the context of a specific function/method.
+    This is used when we need to resolve string type annotations in the 
+    context where they were defined, not where they are being used.
+    """
+    # Split the name by dots to handle nested attributes
+    parts = name.split('.')
+    if not parts:
+        return Any
+
+    # Get the module where the context function is defined
+    module = sys.modules.get(context_func.__module__, None)
+    if not module:
+        return Any
+
+    # Start with the base module
+    current = module
+    for part in parts:
+        if not hasattr(current, part):
+            return Any
+        current = getattr(current, part)
+
+    # Check the final result
+    if isinstance(current, type) or getattr(current, '__module__', None) == "typing":
+        return current
+    elif isinstance(current, Callable):
+        return guess_return_type(current)
+
+    return Any
+
+
 def guess_return_type(func: Callable, use_literals=True) -> Type:
     """
     Infer the return type of a Python function by analyzing its AST.
@@ -347,6 +379,9 @@ def _infer_expr_type(
                         if isinstance(return_type, TypeVar):
                             # For class methods, the TypeVar is bound to the class
                             return class_type
+                        # If return type is a string, resolve it in the method's module context
+                        if isinstance(return_type, str):
+                            return _get_module_type_in_context(return_type, method)
                         return return_type
             
             # Handle regular method calls
