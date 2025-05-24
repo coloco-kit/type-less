@@ -153,3 +153,21 @@ def test_guess_return_type_follow_class_members():
         }
     
     assert validate_is_equivalent_type(guess_return_type(func), TheCatReturns)
+
+
+def it_makes_two() -> tuple[int, str]:
+    return 1, "hello"
+
+def test_guess_tuple_return():
+    class ExpectedTwo(TypedDict):
+        a: int
+        b: str
+
+    def func(cat: TestCat):
+        a, b = it_makes_two()
+        return {
+            "a": a,
+            "b": b,
+        }
+    
+    assert validate_is_equivalent_type(guess_return_type(func), ExpectedTwo)

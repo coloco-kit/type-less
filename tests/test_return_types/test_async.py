@@ -41,8 +41,29 @@ async def test_guess_return_type_follow_function_return_async():
     
     assert validate_is_equivalent_type(guess_return_type(func), TheCatReturns)
 
+# Static method
 
-# Inherited Async
+class FeatureA:
+    thingo: int
+
+    @staticmethod
+    async def run_me() -> tuple["FeatureA", "FeatureB"]:
+        return FeatureA(), FeatureB()
+
+
+class FeatureB:
+    thingo: bool
+
+
+@pytest.mark.asyncio
+async def test_guess_return_type_follow_function_return_async():
+    async def func():
+        fa, fb = await FeatureA.run_me()
+        return fb, fa
+    
+    assert validate_is_equivalent_type(guess_return_type(func), tuple[FeatureB, FeatureA])
+
+# Inherited
 
 
 @pytest.mark.asyncio

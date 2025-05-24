@@ -136,6 +136,29 @@ def _analyze_function_body(
             for target in node.targets:
                 if isinstance(target, ast.Name):
                     symbol_table[target.id] = assigned_type
+                elif isinstance(target, ast.Tuple):
+                    # Handle tuple unpacking
+                    if hasattr(assigned_type, "__origin__") and assigned_type.__origin__ is tuple:
+                        # Get the element types from the tuple type
+                        element_types = assigned_type.__args__
+                        if isinstance(element_types, tuple):
+                            # Match each target with its corresponding type
+                            for i, elt in enumerate(target.elts):
+                                if isinstance(elt, ast.Name):
+                                    if i < len(element_types):
+                                        symbol_table[elt.id] = element_types[i]
+                                    else:
+                                        symbol_table[elt.id] = Any
+                        else:
+                            # If we can't determine individual element types, use Any
+                            for elt in target.elts:
+                                if isinstance(elt, ast.Name):
+                                    symbol_table[elt.id] = Any
+                    else:
+                        # If not a tuple type, use Any for all targets
+                        for elt in target.elts:
+                            if isinstance(elt, ast.Name):
+                                symbol_table[elt.id] = Any
         elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             # Handle annotated assignments
             symbol_table[node.target.id] = _resolve_annotation(
@@ -337,6 +360,9 @@ def _infer_expr_type(
                             arg_name = node.args[0].id
                             if arg_name in symbol_table:
                                 return symbol_table[arg_name]
+                        return return_type
+                    # Handle tuple return types
+                    if hasattr(return_type, "__origin__") and return_type.__origin__ is tuple:
                         return return_type
 
         # Handle module function calls
