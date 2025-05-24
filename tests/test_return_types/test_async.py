@@ -46,7 +46,7 @@ async def test_guess_return_type_follow_function_return_async():
 
 
 @pytest.mark.asyncio
-async def test_guess_return_type_follow_function_return_async_inherited():
+async def test_inherited_typevar_async_method():
     async def func():
         cat = await Cat.create()
         return cat
@@ -54,7 +54,7 @@ async def test_guess_return_type_follow_function_return_async_inherited():
     assert validate_is_equivalent_type(guess_return_type(func), Cat)
 
 @pytest.mark.asyncio
-async def test_guess_return_type_follow_function_return_async_method():
+async def test_awaitable_member_variable():
     async def func():
         collar = Collar()
         cat = await collar.cat

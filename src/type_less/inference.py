@@ -1,5 +1,6 @@
 from __future__ import annotations
 import ast
+from collections.abc import Awaitable as ABCAwaitable
 import inspect
 import sys
 from typing import (
@@ -15,6 +16,7 @@ from typing import (
     TypeVar,
     get_origin,
     get_args,
+    Awaitable,
 )
 import textwrap
 
@@ -409,6 +411,11 @@ def _infer_expr_type(
                         return attr_value
                     # For regular attributes, infer their type
                     return type(attr_value)
+            # If the object is an instance of a class
+            elif hasattr(obj_type, "__class__"):
+                class_type = obj_type.__class__
+                if hasattr(class_type, "__annotations__") and node.attr in class_type.__annotations__:
+                    return class_type.__annotations__[node.attr]
         
         # For other attribute access, default to Any
         return Any
@@ -430,7 +437,11 @@ def _infer_expr_type(
         
     elif isinstance(node, ast.Await):
         # Handle await expressions by inferring the type of the awaited value
-        return _infer_expr_type(node.value, symbol_table, func, nested_path, use_literals)
+        awaited_type = _infer_expr_type(node.value, symbol_table, func, nested_path, use_literals)
+        origin = get_origin(awaited_type)
+        if origin in (Awaitable, ABCAwaitable):
+            return awaited_type.__args__[0]
+        return awaited_type
 
     # Default for complex or unknown expressions
     return Any
