@@ -67,10 +67,6 @@ def guess_return_type(func: Callable, use_literals=True) -> Type:
         The inferred return type
     """
 
-    # If annotations exist, return the return type
-    if hasattr(func, "__annotations__") and "return" in func.__annotations__:
-        return func.__annotations__["return"]
-
     # Get function source code and create AST
     try:
         source = inspect.getsource(func)
@@ -354,7 +350,17 @@ def _infer_expr_type(
                         return return_type
             
             # Handle regular method calls
-            return _get_module_type(func, f"{node.func.value.id}.{node.func.attr}")
+            # Build the full attribute path by traversing the AST
+            parts = []
+            current = node.func
+            while isinstance(current, ast.Attribute):
+                parts.append(current.attr)
+                current = current.value
+            if isinstance(current, ast.Name):
+                parts.append(current.id)
+            # Reverse the parts to get the correct order
+            parts.reverse()
+            return _get_module_type(func, ".".join(parts))
         
         if isinstance(node.func, ast.Name):
             func_name = node.func.id

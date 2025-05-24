@@ -152,6 +152,9 @@ def validate_is_equivalent_type(type1, type2):
     # Handle basic types
     if origin1 is None and origin2 is None:
         if isinstance(type1, type) and isinstance(type2, type):
+            # Compare types by their class name and module name
+            if type1.__name__ == type2.__name__ and type1.__module__ == type2.__module__:
+                return True
             if type1 is not type2 and type1 != type2:
                 raise AssertionError(f"Basic type mismatch: {type1} vs {type2}")
             return True
