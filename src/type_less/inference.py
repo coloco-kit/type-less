@@ -1,6 +1,7 @@
 from __future__ import annotations
 import ast
 from collections.abc import Awaitable as ABCAwaitable
+from functools import cache
 import inspect
 import sys
 from typing import (
@@ -14,11 +15,17 @@ from typing import (
     Type,
     Union,
     TypeVar,
-    get_origin,
     get_args,
+    get_origin,
+    get_type_hints,
     Awaitable,
 )
 import textwrap
+
+
+@cache
+def _get_cached_type_hints(cls: Type[Any]) -> dict[str, Type[Any]]:
+    return get_type_hints(cls)
 
 def _snake_case_to_capital_case(name: str) -> str:
     return "".join(word.capitalize() for word in name.split("_"))
@@ -375,7 +382,7 @@ def _infer_expr_type(
                     # Get the method
                     method = getattr(class_type, method_name, None)
                     if method and hasattr(method, "__annotations__"):
-                        return_type = method.__annotations__.get("return")
+                        return_type = _get_cached_type_hints(method).get("return")
                         if isinstance(return_type, TypeVar):
                             # For class methods, the TypeVar is bound to the class
                             return class_type
@@ -405,7 +412,7 @@ def _infer_expr_type(
             if func_name in symbol_table:
                 func_type = symbol_table[func_name]
                 if hasattr(func_type, "__annotations__") and "return" in func_type.__annotations__:
-                    return_type = func_type.__annotations__["return"]
+                    return_type = _get_cached_type_hints(func_type)["return"]
                     # If return type is a TypeVar, try to resolve it from arguments
                     if isinstance(return_type, TypeVar):
                         # Look at the first argument to determine the type
@@ -419,7 +426,7 @@ def _infer_expr_type(
             func_def = _get_function_definition(func_name, func)
             if func_def and hasattr(func_def, "__annotations__"):
                 if "return" in func_def.__annotations__:
-                    return_type = func_def.__annotations__["return"]
+                    return_type = _get_cached_type_hints(func_def)["return"]
                     if isinstance(return_type, TypeVar):
                         # Look at the first argument to determine the type
                         if node.args and isinstance(node.args[0], ast.Constant):
@@ -494,7 +501,7 @@ def _infer_expr_type(
             
             # If the object has type annotations, try to get the attribute type
             if hasattr(obj_type, "__annotations__") and node.attr in obj_type.__annotations__:
-                return obj_type.__annotations__[node.attr]
+                return _get_cached_type_hints(obj_type)[node.attr]
             
             # If the object is a class with class variables
             if isinstance(obj_type, type):
@@ -509,7 +516,7 @@ def _infer_expr_type(
             elif hasattr(obj_type, "__class__"):
                 class_type = obj_type.__class__
                 if hasattr(class_type, "__annotations__") and node.attr in class_type.__annotations__:
-                    return class_type.__annotations__[node.attr]
+                    return _get_cached_type_hints(class_type)[node.attr]
         
         # For other attribute access, default to Any
         return Any
