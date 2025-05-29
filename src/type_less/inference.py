@@ -536,8 +536,34 @@ def _infer_expr_type(
         # Handle await expressions by inferring the type of the awaited value
         awaited_type = _infer_expr_type(node.value, symbol_table, func, nested_path, use_literals)
         origin = get_origin(awaited_type)
+        
+        # Check if it's a standard Awaitable type
         if origin in (Awaitable, ABCAwaitable):
             return awaited_type.__args__[0]
+        
+        # Check if the origin is a subclass of Awaitable (like QuerySetSingle)
+        if origin is not None and isinstance(origin, type):
+            try:
+                if issubclass(origin, (Awaitable, ABCAwaitable)):
+                    if awaited_type.__args__:
+                        result_type = awaited_type.__args__[0]
+                        # Handle Self type - resolve it to the actual class
+                        if hasattr(result_type, '__name__') and result_type.__name__ == 'Self':
+                            # Look for the class context in the call chain
+                            # Check if we're in a method call context
+                            if isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Attribute):
+                                if isinstance(node.value.func.value, ast.Name):
+                                    class_name = node.value.func.value.id
+                                    class_type = _get_module_type(func, class_name)
+                                    if isinstance(class_type, type):
+                                        return class_type
+                        return result_type
+                    return Any
+            except TypeError:
+                # issubclass can raise TypeError for some types
+                pass
+        
+        # If not awaitable, return the type as-is
         return awaited_type
 
     # Default for complex or unknown expressions

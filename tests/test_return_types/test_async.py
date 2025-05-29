@@ -1,8 +1,8 @@
 import pytest
-from ..external import AsyncDonkey as Dinkey, Donkey
+from ..external import AsyncDonkey as Dinkey
 from ..matching import validate_is_equivalent_type
 from type_less.inference import guess_return_type
-from typing import Awaitable, Literal, TypedDict, Type, TypeVar, Union
+from typing import Any, Awaitable, Generator, Literal, Protocol, Self, TypedDict, Type, TypeVar
 
 
 MODEL = TypeVar("MODEL", bound="Animal")
@@ -19,7 +19,6 @@ class Cat(Animal):
 
 class Collar:
     cat: Awaitable[Cat]
-
 
 
 # Async
@@ -95,3 +94,27 @@ async def test_external_static_method_quoted_type_renamed():
         return donkey, donkey2
     
     assert validate_is_equivalent_type(guess_return_type(func), tuple[Dinkey, Dinkey])
+
+# Complex Generator - tortoise ORM check
+
+T_co = TypeVar("T_co", covariant=True)
+
+class QuerySetSingle(Protocol[T_co]):
+    def __await__(self) -> Generator[Any, None, T_co]: ...  # pragma: nocoverage
+
+class Model:
+    @classmethod
+    def get(cls) -> QuerySetSingle[Self]:
+        return QuerySetSingle[Self]()
+
+class Tortoise(Model):
+    id: int
+    name: str
+
+@pytest.mark.asyncio
+async def test_tortoise_queryset_single():
+    async def func():
+        model = await Tortoise.get()
+        return model
+    
+    assert validate_is_equivalent_type(guess_return_type(func), Tortoise)
