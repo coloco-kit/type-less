@@ -98,14 +98,22 @@ async def test_external_static_method_quoted_type_renamed():
 # Complex Generator - tortoise ORM check
 
 T_co = TypeVar("T_co", covariant=True)
+MODEL = TypeVar("MODEL", bound="Model")
 
 class QuerySetSingle(Protocol[T_co]):
     def __await__(self) -> Generator[Any, None, T_co]: ...  # pragma: nocoverage
+
+class QuerySet(Protocol[T_co]):
+    def __await__(self) -> Generator[Any, None, list[T_co]]: ...  # pragma: nocoverage
 
 class Model:
     @classmethod
     def get(cls) -> QuerySetSingle[Self]:
         return QuerySetSingle[Self]()
+    
+    @classmethod
+    def all(cls) -> QuerySet[Self]:
+        return QuerySet[Self]()
 
 class Tortoise(Model):
     id: int
@@ -118,3 +126,11 @@ async def test_tortoise_queryset_single():
         return model
     
     assert validate_is_equivalent_type(guess_return_type(func), Tortoise)
+
+@pytest.mark.asyncio
+async def test_tortoise_queryset():
+    async def func():
+        models = await Tortoise.all()
+        return models
+    
+    assert validate_is_equivalent_type(guess_return_type(func), list[Tortoise])

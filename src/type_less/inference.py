@@ -545,6 +545,96 @@ def _infer_expr_type(
         if origin is not None and isinstance(origin, type):
             try:
                 if issubclass(origin, (Awaitable, ABCAwaitable)):
+                    
+                    # Check if it has a __await__ method that returns a Generator
+                    if hasattr(origin, '__await__'):
+                        try:
+                            await_method = getattr(origin, '__await__')
+                            await_hints = _get_cached_type_hints(await_method)
+                            if 'return' in await_hints:
+                                await_return_type = await_hints['return']
+                                # Check if it's a Generator[Any, None, T] - we want T
+                                await_origin = get_origin(await_return_type)
+                                if await_origin is not None:
+                                    from collections.abc import Generator
+                                    if await_origin in (Generator, ABCAwaitable) or (hasattr(await_origin, '__name__') and await_origin.__name__ == 'Generator'):
+                                        await_args = get_args(await_return_type)
+                                        if len(await_args) >= 3:
+                                            # For Generator[Send, Yield, Return], we want Return (the 3rd arg)
+                                            final_type = await_args[2]
+                                            
+                                            # We need to substitute TypeVars in final_type with the actual type arguments
+                                            # from the original awaited_type
+                                            if awaited_type.__args__:
+                                                # Get the type arguments from the original type (e.g., Self from QuerySet[Self])
+                                                original_args = awaited_type.__args__
+                                                
+                                                # Handle the case where final_type contains TypeVars that need substitution
+                                                # TODO: refactor this AI goo
+                                                final_origin = get_origin(final_type)
+                                                if final_origin is not None:
+                                                    final_args = get_args(final_type)
+                                                    if final_args:
+                                                        resolved_args = []
+                                                        for arg in final_args:
+                                                            # If this is a TypeVar, substitute it with the corresponding type from original_args
+                                                            if isinstance(arg, TypeVar):
+                                                                # For now, assume 1:1 mapping (first TypeVar gets first original arg)
+                                                                if original_args:
+                                                                    substituted_arg = original_args[0]
+                                                                    # If the substituted arg is Self, resolve it to the actual class
+                                                                    if hasattr(substituted_arg, '__name__') and substituted_arg.__name__ == 'Self':
+                                                                        if isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Attribute):
+                                                                            if isinstance(node.value.func.value, ast.Name):
+                                                                                class_name = node.value.func.value.id
+                                                                                class_type = _get_module_type(func, class_name)
+                                                                                if isinstance(class_type, type):
+                                                                                    resolved_args.append(class_type)
+                                                                                else:
+                                                                                    resolved_args.append(substituted_arg)
+                                                                            else:
+                                                                                resolved_args.append(substituted_arg)
+                                                                        else:
+                                                                            resolved_args.append(substituted_arg)
+                                                                    else:
+                                                                        resolved_args.append(substituted_arg)
+                                                                else:
+                                                                    resolved_args.append(arg)
+                                                            else:
+                                                                resolved_args.append(arg)
+                                                        
+                                                        # Reconstruct the type with resolved args
+                                                        if final_origin is list:
+                                                            return list[resolved_args[0]] if len(resolved_args) == 1 else list[Union[tuple(resolved_args)]]
+                                                        elif final_origin is tuple:
+                                                            return tuple[tuple(resolved_args)]
+                                                        elif final_origin is dict:
+                                                            return dict[resolved_args[0], resolved_args[1]] if len(resolved_args) == 2 else dict[Any, Any]
+                                                        elif final_origin is set:
+                                                            return set[resolved_args[0]] if len(resolved_args) == 1 else set[Union[tuple(resolved_args)]]
+                                                        else:
+                                                            try:
+                                                                return final_origin[tuple(resolved_args)]
+                                                            except (TypeError, AttributeError):
+                                                                return final_type
+                                                
+                                                # If final_type is directly a TypeVar, substitute it
+                                                elif isinstance(final_type, TypeVar) and original_args:
+                                                    substituted_type = original_args[0]
+                                                    if hasattr(substituted_type, '__name__') and substituted_type.__name__ == 'Self':
+                                                        if isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Attribute):
+                                                            if isinstance(node.value.func.value, ast.Name):
+                                                                class_name = node.value.func.value.id
+                                                                class_type = _get_module_type(func, class_name)
+                                                                if isinstance(class_type, type):
+                                                                    return class_type
+                                                    return substituted_type
+                                            
+                                            return final_type
+                        except Exception:
+                            pass
+                    
+                    # Fallback to the original logic
                     if awaited_type.__args__:
                         result_type = awaited_type.__args__[0]
                         # Handle Self type - resolve it to the actual class
@@ -629,7 +719,7 @@ def _create_typed_dict_from_dict(
 def _resolve_complex_type_in_context(type_annotation: Type, context_func: Callable) -> Type:
     """
     Recursively resolve quoted types in complex type annotations.
-    This handles cases like tuple["AsyncDonkey", "Donkey"] where the strings
+    This handles cases like tuple["Cat", "Dog"] where the strings
     need to be resolved to actual types in the context where they were defined.
     """
     # Handle simple string types
