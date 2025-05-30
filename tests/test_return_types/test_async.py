@@ -2,7 +2,7 @@ import pytest
 from ..external import AsyncDonkey as Dinkey
 from ..matching import validate_is_equivalent_type
 from type_less.inference import guess_return_type
-from typing import Any, Awaitable, Generator, Literal, Protocol, Self, TypedDict, Type, TypeVar
+from typing import Any, Awaitable, Callable, Generator, Literal, Protocol, Self, TypedDict, Type, TypeVar
 
 
 MODEL = TypeVar("MODEL", bound="Animal")
@@ -134,3 +134,32 @@ async def test_tortoise_queryset():
         return models
     
     assert validate_is_equivalent_type(guess_return_type(func), list[Tortoise])
+
+# Decorated
+
+CLS = TypeVar("CLS")
+def decorated(*args, **kwargs) -> Callable[[Type[CLS]], Type[CLS]]:
+    def decorator(cls: Type[CLS]) -> Type[CLS]:
+        return cls
+    return decorator
+
+@decorated("test")
+class DecoratedTortoise(Model):
+    id: int
+    name: str
+
+@pytest.mark.asyncio
+async def test_decorated_tortoise_queryset_single():
+    async def func():
+        models = await DecoratedTortoise.get()
+        return models
+    
+    assert validate_is_equivalent_type(guess_return_type(func), DecoratedTortoise)
+
+@pytest.mark.asyncio
+async def test_decorated_tortoise_queryset():
+    async def func():
+        models = await DecoratedTortoise.all()
+        return models
+    
+    assert validate_is_equivalent_type(guess_return_type(func), list[DecoratedTortoise])
