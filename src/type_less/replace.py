@@ -28,7 +28,7 @@ def replace_type_hint_map_deep(type_hint: type, type_map: dict[type, type]) -> t
     Examples:
         # Replace str with bytes in List[Dict[str, int]]
         result = deep_search_replace_type(List[Dict[str, int]], str, bytes)
-        # Returns: List[Dict[bytes, int]]
+        # Returns: List[Dict[bytes, int]], 1
 
         # Replace int with float in complex nested type
         result = deep_search_replace_type(
