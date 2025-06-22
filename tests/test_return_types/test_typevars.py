@@ -1,6 +1,5 @@
-from ..matching import validate_is_equivalent_type
 from type_less.inference import guess_return_type
-from typing import TypeVar, Generic, Type
+from typing import Annotated, TypeVar, Type
 
 T = TypeVar("T")
 def get_item(item: T) -> T:
@@ -28,3 +27,10 @@ def test_typevar_inherited_class():
         return value
     
     assert guess_return_type(func, use_literals=False) == Child
+
+AnnotatedType = Annotated[int, "Okay Annotated!"]
+def test_annotated_type():
+    def func(some_arg: AnnotatedType):
+        return some_arg
+    
+    assert guess_return_type(func) == int

@@ -19,8 +19,18 @@ from typing import (
     get_origin,
     get_type_hints,
     Awaitable,
+    Annotated,
 )
 import textwrap
+
+
+def _unwrap_annotated(t: Type) -> Type:
+    """Unwrap Annotated types to get the underlying type."""
+    # get_origin is from typing
+    if get_origin(t) is Annotated:
+        # The first argument to Annotated is the actual type
+        return get_args(t)[0]
+    return t
 
 
 @cache
@@ -218,28 +228,28 @@ def _resolve_annotation(annotation: ast.AST, type_context: dict[str, Any], func:
         type_name = annotation.id
         # Check Python's built-in types first
         if type_name in __builtins__:
-            return __builtins__[type_name]
+            return _unwrap_annotated(__builtins__[type_name])
 
         # Check if it's a TypeVar
         if type_name in type_context:
-            return type_context[type_name]
+            return _unwrap_annotated(type_context[type_name])
 
         # Otherwise check if it's imported
-        return _get_module_type(func, type_name)
+        return _unwrap_annotated(_get_module_type(func, type_name))
 
     elif isinstance(annotation, ast.Constant) and isinstance(annotation.value, str):
         # Handle string literal type names
         type_name = annotation.value
         # Check Python's built-in types first
         if type_name in __builtins__:
-            return __builtins__[type_name]
+            return _unwrap_annotated(__builtins__[type_name])
 
         # Check if it's a TypeVar
         if type_name in type_context:
-            return type_context[type_name]
+            return _unwrap_annotated(type_context[type_name])
 
         # Otherwise check if it's imported
-        return _get_module_type(func, type_name)
+        return _unwrap_annotated(_get_module_type(func, type_name))
 
     elif isinstance(annotation, ast.Subscript):
         # Handle generic types like list[int], dict[str, int], etc.
@@ -257,16 +267,6 @@ def _resolve_annotation(annotation: ast.AST, type_context: dict[str, Any], func:
             elif base_type == "Set" or base_type == "set":
                 elem_type = _resolve_annotation(annotation.slice, type_context, func)
                 return set[elem_type]
-            elif base_type == "Tuple" or base_type == "tuple":
-                if isinstance(annotation.slice, ast.Tuple):
-                    elem_types = [
-                        _resolve_annotation(e, type_context, func) for e in annotation.slice.elts
-                    ]
-                    return tuple[tuple(elem_types)]
-                return Tuple
-            elif base_type == "Optional":
-                elem_type = _resolve_annotation(annotation.slice, type_context, func)
-                return Optional[elem_type]
             elif base_type == "Union":
                 if isinstance(annotation.slice, ast.Tuple):
                     elem_types = [
@@ -283,6 +283,12 @@ def _resolve_annotation(annotation: ast.AST, type_context: dict[str, Any], func:
                     return Literal[tuple(values)]  # type: ignore
                 elif isinstance(annotation.slice, ast.Constant):
                     return Literal[annotation.slice.value]  # type: ignore
+            elif base_type == "Optional":
+                elem_type = _resolve_annotation(annotation.slice, type_context, func)
+                return Optional[elem_type]
+            elif base_type == "Type":
+                elem_type = _resolve_annotation(annotation.slice, type_context, func)
+                return Type[elem_type]
             elif base_type == "TypeVar":
                 # Handle TypeVar definitions
                 if isinstance(annotation.slice, ast.Constant):
@@ -322,10 +328,7 @@ def _infer_expr_type(
     elif isinstance(node, ast.List):
         if not node.elts:
             return list[Any]
-        element_types = [
-            _infer_expr_type(elt, symbol_table, func, nested_path, use_literals)
-            for elt in node.elts
-        ]
+        element_types = [_infer_expr_type(elt, symbol_table, func, nested_path, use_literals) for elt in node.elts]
         element_types = [_resolve_str_type(t, func) for t in element_types]
         if len(set(element_types)) == 1:
             return list[element_types[0]]
@@ -334,20 +337,14 @@ def _infer_expr_type(
     elif isinstance(node, ast.Tuple):
         if not node.elts:
             return tuple[()]
-        element_types = [
-            _infer_expr_type(elt, symbol_table, func, nested_path, use_literals)
-            for elt in node.elts
-        ]
+        element_types = [_infer_expr_type(elt, symbol_table, func, nested_path, use_literals) for elt in node.elts]
         element_types = [_resolve_str_type(t, func) for t in element_types]
         return tuple[tuple(element_types)]
 
     elif isinstance(node, ast.Set):
         if not node.elts:
             return set[Any]
-        element_types = [
-            _infer_expr_type(elt, symbol_table, func, nested_path, use_literals)
-            for elt in node.elts
-        ]
+        element_types = [_infer_expr_type(elt, symbol_table, func, nested_path, use_literals) for elt in node.elts]
         element_types = [_resolve_str_type(t, func) for t in element_types]
         if len(set(element_types)) == 1:
             return set[element_types[0]]
@@ -520,10 +517,7 @@ def _infer_expr_type(
                 # If the object is an instance of a class
                 elif hasattr(obj_type, "__class__"):
                     class_type = obj_type.__class__
-                    if (
-                        hasattr(class_type, "__annotations__")
-                        and node.attr in class_type.__annotations__
-                    ):
+                    if hasattr(class_type, "__annotations__") and node.attr in class_type.__annotations__:
                         return _get_cached_type_hints(class_type)[node.attr]
             else:
                 # If not in symbol table, try to resolve from module
@@ -531,10 +525,7 @@ def _infer_expr_type(
                 print(f"DEBUG: Resolved {node.value.id} to {obj_type}")  # Debug line
                 if obj_type != Any:
                     # If the object has type annotations, try to get the attribute type
-                    if (
-                        hasattr(obj_type, "__annotations__")
-                        and node.attr in obj_type.__annotations__
-                    ):
+                    if hasattr(obj_type, "__annotations__") and node.attr in obj_type.__annotations__:
                         return _get_cached_type_hints(obj_type)[node.attr]
 
                     # If the object is a class with class variables
@@ -542,20 +533,14 @@ def _infer_expr_type(
                         if hasattr(obj_type, node.attr):
                             attr_value = getattr(obj_type, node.attr)
                             # If it's a Literal type or other type annotation
-                            if (
-                                hasattr(attr_value, "__origin__")
-                                and attr_value.__origin__ is Literal
-                            ):
+                            if hasattr(attr_value, "__origin__") and attr_value.__origin__ is Literal:
                                 return attr_value
                             # For regular attributes, infer their type
                             return type(attr_value)
                     # If the object is an instance of a class
                     elif hasattr(obj_type, "__class__"):
                         class_type = obj_type.__class__
-                        if (
-                            hasattr(class_type, "__annotations__")
-                            and node.attr in class_type.__annotations__
-                        ):
+                        if hasattr(class_type, "__annotations__") and node.attr in class_type.__annotations__:
                             return _get_cached_type_hints(class_type)[node.attr]
 
         # For other attribute access, default to Any
@@ -599,8 +584,7 @@ def _infer_expr_type(
                                     from collections.abc import Generator
 
                                     if await_origin in (Generator, ABCAwaitable) or (
-                                        hasattr(await_origin, "__name__")
-                                        and await_origin.__name__ == "Generator"
+                                        hasattr(await_origin, "__name__") and await_origin.__name__ == "Generator"
                                     ):
                                         await_args = get_args(await_return_type)
                                         if len(await_args) >= 3:
@@ -625,17 +609,14 @@ def _infer_expr_type(
                                                             if isinstance(arg, TypeVar):
                                                                 # For now, assume 1:1 mapping (first TypeVar gets first original arg)
                                                                 if original_args:
-                                                                    substituted_arg = original_args[
-                                                                        0
-                                                                    ]
+                                                                    substituted_arg = original_args[0]
                                                                     # If the substituted arg is Self, resolve it to the actual class
                                                                     if (
                                                                         hasattr(
                                                                             substituted_arg,
                                                                             "__name__",
                                                                         )
-                                                                        and substituted_arg.__name__
-                                                                        == "Self"
+                                                                        and substituted_arg.__name__ == "Self"
                                                                     ):
                                                                         if isinstance(
                                                                             node.value, ast.Call
@@ -647,34 +628,22 @@ def _infer_expr_type(
                                                                                 node.value.func.value,
                                                                                 ast.Name,
                                                                             ):
-                                                                                class_name = (
-                                                                                    node.value.func.value.id
-                                                                                )
+                                                                                class_name = node.value.func.value.id
                                                                                 class_type = _get_module_type(
                                                                                     func, class_name
                                                                                 )
-                                                                                if isinstance(
-                                                                                    class_type, type
-                                                                                ):
-                                                                                    resolved_args.append(
-                                                                                        class_type
-                                                                                    )
+                                                                                if isinstance(class_type, type):
+                                                                                    resolved_args.append(class_type)
                                                                                 else:
                                                                                     resolved_args.append(
                                                                                         substituted_arg
                                                                                     )
                                                                             else:
-                                                                                resolved_args.append(
-                                                                                    substituted_arg
-                                                                                )
+                                                                                resolved_args.append(substituted_arg)
                                                                         else:
-                                                                            resolved_args.append(
-                                                                                substituted_arg
-                                                                            )
+                                                                            resolved_args.append(substituted_arg)
                                                                     else:
-                                                                        resolved_args.append(
-                                                                            substituted_arg
-                                                                        )
+                                                                        resolved_args.append(substituted_arg)
                                                                 else:
                                                                     resolved_args.append(arg)
                                                             else:
@@ -685,9 +654,7 @@ def _infer_expr_type(
                                                             return (
                                                                 list[resolved_args[0]]
                                                                 if len(resolved_args) == 1
-                                                                else list[
-                                                                    Union[tuple(resolved_args)]
-                                                                ]
+                                                                else list[Union[tuple(resolved_args)]]
                                                             )
                                                         elif final_origin is tuple:
                                                             return tuple[tuple(resolved_args)]
@@ -704,42 +671,27 @@ def _infer_expr_type(
                                                             return (
                                                                 set[resolved_args[0]]
                                                                 if len(resolved_args) == 1
-                                                                else set[
-                                                                    Union[tuple(resolved_args)]
-                                                                ]
+                                                                else set[Union[tuple(resolved_args)]]
                                                             )
                                                         else:
                                                             try:
-                                                                return final_origin[
-                                                                    tuple(resolved_args)
-                                                                ]
+                                                                return final_origin[tuple(resolved_args)]
                                                             except (TypeError, AttributeError):
                                                                 return final_type
 
                                                 # If final_type is directly a TypeVar, substitute it
-                                                elif (
-                                                    isinstance(final_type, TypeVar)
-                                                    and original_args
-                                                ):
+                                                elif isinstance(final_type, TypeVar) and original_args:
                                                     substituted_type = original_args[0]
                                                     if (
                                                         hasattr(substituted_type, "__name__")
                                                         and substituted_type.__name__ == "Self"
                                                     ):
-                                                        if isinstance(
-                                                            node.value, ast.Call
-                                                        ) and isinstance(
+                                                        if isinstance(node.value, ast.Call) and isinstance(
                                                             node.value.func, ast.Attribute
                                                         ):
-                                                            if isinstance(
-                                                                node.value.func.value, ast.Name
-                                                            ):
-                                                                class_name = (
-                                                                    node.value.func.value.id
-                                                                )
-                                                                class_type = _get_module_type(
-                                                                    func, class_name
-                                                                )
+                                                            if isinstance(node.value.func.value, ast.Name):
+                                                                class_name = node.value.func.value.id
+                                                                class_type = _get_module_type(func, class_name)
                                                                 if isinstance(class_type, type):
                                                                     return class_type
                                                     return substituted_type
@@ -755,9 +707,7 @@ def _infer_expr_type(
                         if hasattr(result_type, "__name__") and result_type.__name__ == "Self":
                             # Look for the class context in the call chain
                             # Check if we're in a method call context
-                            if isinstance(node.value, ast.Call) and isinstance(
-                                node.value.func, ast.Attribute
-                            ):
+                            if isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Attribute):
                                 if isinstance(node.value.func.value, ast.Name):
                                     class_name = node.value.func.value.id
                                     class_type = _get_module_type(func, class_name)
@@ -811,12 +761,10 @@ def _create_typed_dict_from_dict(
     # If not a valid TypedDict, return a regular Dict with inferred types
     if dict_node.keys:
         key_types = [
-            _infer_expr_type(key, symbol_table, func, nested_path + [key], use_literals)
-            for key in dict_node.keys
+            _infer_expr_type(key, symbol_table, func, nested_path + [key], use_literals) for key in dict_node.keys
         ]
         value_types = [
-            _infer_expr_type(value, symbol_table, func, nested_path, use_literals)
-            for value in dict_node.values
+            _infer_expr_type(value, symbol_table, func, nested_path, use_literals) for value in dict_node.values
         ]
 
         # Determine common types
@@ -859,23 +807,11 @@ def _resolve_complex_type_in_context(type_annotation: Type, context_func: Callab
             if origin is tuple:
                 return tuple[tuple(resolved_args)]
             elif origin is list:
-                return (
-                    list[resolved_args[0]]
-                    if len(resolved_args) == 1
-                    else list[Union[tuple(resolved_args)]]
-                )
+                return list[resolved_args[0]] if len(resolved_args) == 1 else list[Union[tuple(resolved_args)]]
             elif origin is dict:
-                return (
-                    dict[resolved_args[0], resolved_args[1]]
-                    if len(resolved_args) == 2
-                    else dict[Any, Any]
-                )
+                return dict[resolved_args[0], resolved_args[1]] if len(resolved_args) == 2 else dict[Any, Any]
             elif origin is set:
-                return (
-                    set[resolved_args[0]]
-                    if len(resolved_args) == 1
-                    else set[Union[tuple(resolved_args)]]
-                )
+                return set[resolved_args[0]] if len(resolved_args) == 1 else set[Union[tuple(resolved_args)]]
             elif origin is Union:
                 return Union[tuple(resolved_args)]
             else:
