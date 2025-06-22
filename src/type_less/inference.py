@@ -527,6 +527,7 @@ def _infer_expr_type(
                 obj_type = symbol_table[node.value.id]
 
                 # Special handling for Tortoise ORM models
+                # TODO: Figure out how to handle this better
                 if hasattr(obj_type, "_meta") and hasattr(obj_type._meta, "fields_map"):
                     field_map = getattr(obj_type._meta, "fields_map")
                     if node.attr in field_map:
