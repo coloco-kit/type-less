@@ -1,4 +1,11 @@
-from ..external import Dog, Donkey as Dinkey, get_dog, get_dog_with_input, LiteralType
+from ..external import (
+    Dog,
+    Donkey as Dinkey,
+    get_dog,
+    get_dog_with_input,
+    LiteralType,
+    test_dataclass_config,
+)
 from .. import external
 from ..matching import validate_is_equivalent_type
 from type_less.inference import guess_return_type
@@ -65,11 +72,15 @@ def test_external_static_method_quoted_type_renamed():
     assert validate_is_equivalent_type(guess_return_type(func), Dinkey)
 
 
-from ..external import test_dataclass_config
-
-
 def test_external_dataclass():
     def func():
         return test_dataclass_config.test_id
+
+    assert guess_return_type(func) == int
+
+
+def test_external_type():
+    def func(donkey: external.Donkey):
+        return donkey.id
 
     assert guess_return_type(func) == int

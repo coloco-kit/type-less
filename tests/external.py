@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal
+from typing import Annotated, Literal
 
 LiteralType = Literal["test1", "test2"]
 
@@ -22,6 +22,8 @@ def get_dog_with_input(input_literal: LiteralType):
 
 
 class Donkey:
+    id: int
+
     @staticmethod
     def get_by_saddle(size: int) -> "Donkey":
         return Donkey()
@@ -42,3 +44,8 @@ class DataclassConfig:
 
 
 test_dataclass_config = DataclassConfig(test_id=1)
+
+
+# Annotations
+
+AnnotatedType = Annotated[int, "testing weeeeee"]
