@@ -57,6 +57,10 @@ def test(request):
     ...
 ```
 
+## Testing
+
+ * uv run pytest
+
 ## TODO:
 ### Add Support:
  * Nested class inference

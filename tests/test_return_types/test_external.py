@@ -11,6 +11,7 @@ from typing import TypedDict
 def test_guess_return_type_imported_function():
     assert validate_is_equivalent_type(guess_return_type(get_dog), Dog)
 
+
 def test_guess_return_type_called_imported_function():
     class TheDogReturns(TypedDict):
         dog: Dog
@@ -20,8 +21,9 @@ def test_guess_return_type_called_imported_function():
         return {
             "dog": dog,
         }
-    
+
     assert validate_is_equivalent_type(guess_return_type(func), TheDogReturns)
+
 
 def test_guess_return_type_imported_function_args():
     class TheDogReturns(TypedDict):
@@ -31,8 +33,9 @@ def test_guess_return_type_imported_function_args():
     def func():
         dog = get_dog_with_input("test1")
         return dog
-    
+
     assert validate_is_equivalent_type(guess_return_type(func), TheDogReturns)
+
 
 def test_guess_return_type_imported_module_function_args():
     class TheDogReturns(TypedDict):
@@ -42,7 +45,7 @@ def test_guess_return_type_imported_module_function_args():
     def func():
         dog = external.get_dog_with_input("test1")
         return dog
-    
+
     assert validate_is_equivalent_type(guess_return_type(func), TheDogReturns)
 
 
@@ -50,7 +53,7 @@ def test_external_static_method_quoted_type_module():
     def func():
         donkey = external.Donkey.get_by_saddle(10)
         return donkey
-    
+
     assert validate_is_equivalent_type(guess_return_type(func), external.Donkey)
 
 
@@ -58,6 +61,15 @@ def test_external_static_method_quoted_type_renamed():
     def func():
         donkey = Dinkey.get_by_saddle(10)
         return donkey
-    
+
     assert validate_is_equivalent_type(guess_return_type(func), Dinkey)
-    
+
+
+from ..external import test_dataclass_config
+
+
+def test_external_dataclass():
+    def func():
+        return test_dataclass_config.test_id
+
+    assert guess_return_type(func) == int
