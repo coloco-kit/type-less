@@ -75,9 +75,7 @@ def _get_module_type(func: Callable, name: str) -> Type:
             if i == 0 and part in getattr(current, "__dict__", {}):
                 current = current.__dict__[part]
             else:
-                print(
-                    f"DEBUG: Module {getattr(current, '__name__', repr(current))} does not have attribute {part}"
-                )  # Debug line
+                # Missing attribute
                 return Any
         else:
             current = getattr(current, part)
@@ -550,7 +548,6 @@ def _infer_expr_type(
             else:
                 # If not in symbol table, try to resolve from module
                 obj_type = _get_module_type(func, node.value.id)
-                print(f"DEBUG: Resolved {node.value.id} to {obj_type}")  # Debug line
                 if obj_type != Any:
                     # If the object has type annotations, try to get the attribute type
                     if (
