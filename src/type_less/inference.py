@@ -526,14 +526,6 @@ def _infer_expr_type(
                 # Get the type of the object
                 obj_type = symbol_table[node.value.id]
 
-                # Special handling for Tortoise ORM models
-                # TODO: Figure out how to handle this better
-                if hasattr(obj_type, "_meta") and hasattr(obj_type._meta, "fields_map"):
-                    field_map = getattr(obj_type._meta, "fields_map")
-                    if node.attr in field_map:
-                        field_obj = field_map[node.attr]
-                        return type(field_obj)
-
                 # If the object has type annotations, try to get the attribute type
                 if hasattr(obj_type, "__annotations__") and node.attr in obj_type.__annotations__:
                     return _get_cached_type_hints(obj_type)[node.attr]
