@@ -27,14 +27,14 @@ def user_me(user: User):
 🚀 Generates Return Types:
 
 ```python
-class UserMeReturnName(TypedDict):
+class UserMeName(TypedDict):
     first: str
     last: str
 
-class UserMeReturn(TypedDict):
+class UserMe(TypedDict):
     id: int
     balance: Literal[13.37]
-    name: UserMeReturnName
+    name: UserMeName
 ```
 
 📋 OpenAPI Spec:
