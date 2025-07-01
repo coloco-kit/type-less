@@ -1,6 +1,6 @@
 [project]
 name = "type-less"
-version = "0.1.24"
+version = "0.1.25"
 description = "Type less types with inferred return types"
 readme = "README.md"
 requires-python = ">=3.11"
