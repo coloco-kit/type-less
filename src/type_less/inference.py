@@ -124,7 +124,35 @@ def _get_module_type_in_context(name: str, context_func: Callable) -> Type:
     return Any
 
 
-def guess_return_type(func: Callable, use_literals=True) -> Type:
+def _default_typed_dict_name_generator(
+    func: Callable, nested_path: list[str], branch_path: list[tuple[ast.AST, bool]]
+) -> str:
+    """Default name generator for TypedDicts."""
+    class_name = f"{_snake_case_to_capital_case(func.__name__)}"
+
+    for condition, is_if_branch in branch_path:
+        cond_name_str = _get_full_attribute_name(condition)
+
+        if cond_name_str:
+            sanitized = "".join(c if c.isalnum() or c == "_" else "_" for c in cond_name_str)
+            branch_name = _snake_case_to_capital_case(sanitized)
+            if is_if_branch:
+                class_name += f"If{branch_name}"
+            else:
+                class_name += f"IfNot{branch_name}"
+
+    for component in nested_path:
+        class_name += _snake_case_to_capital_case(_sanitize_name(component))
+
+    class_name += "Return"
+    return class_name
+
+
+def guess_return_type(
+    func: Callable,
+    use_literals=True,
+    typed_dict_name_generator: Optional[Callable[[Callable, list, list], str]] = None,
+) -> Type:
     """
     Infer the return type of a Python function by analyzing its AST.
     For dictionary returns, creates a TypedDict representation.
@@ -135,7 +163,7 @@ def guess_return_type(func: Callable, use_literals=True) -> Type:
     Returns:
         The inferred return type
     """
-
+    name_generator = typed_dict_name_generator or _default_typed_dict_name_generator
     # Get function source code and create AST
     try:
         source = inspect.getsource(func)
@@ -159,13 +187,15 @@ def guess_return_type(func: Callable, use_literals=True) -> Type:
         return _resolve_annotation(func_def.returns, {}, func)
 
     # Gather type information from annotations and assignments
-    _analyze_function_body(func_def, symbol_table, func, use_literals)
+    _analyze_function_body(func_def, symbol_table, func, use_literals, name_generator)
 
     # Find all return statements
     return_types = []
     for node in ast.walk(func_def):
         if isinstance(node, ast.Return) and node.value:
-            return_type = _infer_expr_type(node.value, symbol_table, func, [], use_literals)
+            return_type = _infer_expr_type(
+                node.value, symbol_table, func, [], use_literals, [], name_generator
+            )
             return_types.append(return_type)
     # If we found return statements
     if return_types:
@@ -180,7 +210,11 @@ def guess_return_type(func: Callable, use_literals=True) -> Type:
 
 
 def _analyze_function_body(
-    func_def: ast.FunctionDef, symbol_table: dict[str, Type], func: Callable, use_literals: bool
+    func_def: ast.FunctionDef,
+    symbol_table: dict[str, Type],
+    func: Callable,
+    use_literals: bool,
+    typed_dict_name_generator: Callable,
 ) -> None:
     """Analyze function body to populate symbol table with type information"""
     # First gather parameter types and TypeVar bindings
@@ -197,7 +231,9 @@ def _analyze_function_body(
     # Analyze assignments to track variable types
     for node in ast.walk(func_def):
         if isinstance(node, ast.Assign):
-            assigned_type = _infer_expr_type(node.value, symbol_table, func, [], use_literals)
+            assigned_type = _infer_expr_type(
+                node.value, symbol_table, func, [], use_literals, [], typed_dict_name_generator
+            )
             for target in node.targets:
                 if isinstance(target, ast.Name):
                     symbol_table[target.id] = assigned_type
@@ -334,16 +370,34 @@ def _infer_expr_type(
     func: Callable,
     nested_path: list[str],
     use_literals: bool,
+    branch_path: list[tuple[ast.AST, bool]],
+    typed_dict_name_generator: Callable,
 ) -> Type:
     """Infer the type of an expression"""
     if isinstance(node, ast.Dict):
-        return _create_typed_dict_from_dict(node, symbol_table, func, nested_path, use_literals)
+        return _create_typed_dict_from_dict(
+            node,
+            symbol_table,
+            func,
+            nested_path,
+            use_literals,
+            branch_path,
+            typed_dict_name_generator,
+        )
 
     elif isinstance(node, ast.List):
         if not node.elts:
             return list[Any]
         element_types = [
-            _infer_expr_type(elt, symbol_table, func, nested_path, use_literals)
+            _infer_expr_type(
+                elt,
+                symbol_table,
+                func,
+                nested_path,
+                use_literals,
+                branch_path,
+                typed_dict_name_generator,
+            )
             for elt in node.elts
         ]
         element_types = [_resolve_str_type(t, func) for t in element_types]
@@ -355,7 +409,15 @@ def _infer_expr_type(
         if not node.elts:
             return tuple[()]
         element_types = [
-            _infer_expr_type(elt, symbol_table, func, nested_path, use_literals)
+            _infer_expr_type(
+                elt,
+                symbol_table,
+                func,
+                nested_path,
+                use_literals,
+                branch_path,
+                typed_dict_name_generator,
+            )
             for elt in node.elts
         ]
         element_types = [_resolve_str_type(t, func) for t in element_types]
@@ -365,7 +427,15 @@ def _infer_expr_type(
         if not node.elts:
             return set[Any]
         element_types = [
-            _infer_expr_type(elt, symbol_table, func, nested_path, use_literals)
+            _infer_expr_type(
+                elt,
+                symbol_table,
+                func,
+                nested_path,
+                use_literals,
+                branch_path,
+                typed_dict_name_generator,
+            )
             for elt in node.elts
         ]
         element_types = [_resolve_str_type(t, func) for t in element_types]
@@ -493,8 +563,24 @@ def _infer_expr_type(
 
     elif isinstance(node, ast.BinOp):
         # Handle binary operations
-        left_type = _infer_expr_type(node.left, symbol_table, func, nested_path, use_literals)
-        right_type = _infer_expr_type(node.right, symbol_table, func, nested_path, use_literals)
+        left_type = _infer_expr_type(
+            node.left,
+            symbol_table,
+            func,
+            nested_path,
+            use_literals,
+            branch_path,
+            typed_dict_name_generator,
+        )
+        right_type = _infer_expr_type(
+            node.right,
+            symbol_table,
+            func,
+            nested_path,
+            use_literals,
+            branch_path,
+            typed_dict_name_generator,
+        )
 
         # String concatenation
         if isinstance(node.op, ast.Add) and (left_type == str or right_type == str):
@@ -512,8 +598,24 @@ def _infer_expr_type(
         return bool
 
     elif isinstance(node, ast.IfExp):
-        body_type = _infer_expr_type(node.body, symbol_table, func, nested_path, use_literals)
-        orelse_type = _infer_expr_type(node.orelse, symbol_table, func, nested_path, use_literals)
+        body_type = _infer_expr_type(
+            node.body,
+            symbol_table,
+            func,
+            nested_path,
+            use_literals,
+            branch_path + [(node.test, True)],
+            typed_dict_name_generator,
+        )
+        orelse_type = _infer_expr_type(
+            node.orelse,
+            symbol_table,
+            func,
+            nested_path,
+            use_literals,
+            branch_path + [(node.test, False)],
+            typed_dict_name_generator,
+        )
         return body_type | orelse_type
 
     elif isinstance(node, ast.Attribute):
@@ -581,7 +683,15 @@ def _infer_expr_type(
         return Any
 
     elif isinstance(node, ast.Subscript):
-        value_type = _infer_expr_type(node.value, symbol_table, func, nested_path, use_literals)
+        value_type = _infer_expr_type(
+            node.value,
+            symbol_table,
+            func,
+            nested_path,
+            use_literals,
+            branch_path,
+            typed_dict_name_generator,
+        )
         value_type = _resolve_str_type(value_type, func)
         # If the value is a list, get its element type
         if hasattr(value_type, "__origin__") and value_type.__origin__ is list:
@@ -593,7 +703,15 @@ def _infer_expr_type(
 
     elif isinstance(node, ast.Await):
         # Handle await expressions by inferring the type of the awaited value
-        awaited_type = _infer_expr_type(node.value, symbol_table, func, nested_path, use_literals)
+        awaited_type = _infer_expr_type(
+            node.value,
+            symbol_table,
+            func,
+            nested_path,
+            use_literals,
+            branch_path,
+            typed_dict_name_generator,
+        )
         origin = get_origin(awaited_type)
 
         # Check if it's a standard Awaitable type
@@ -801,6 +919,8 @@ def _create_typed_dict_from_dict(
     func: Callable,
     nested_path: list[str],
     use_literals: bool,
+    branch_path: list[tuple[ast.AST, bool]],
+    typed_dict_name_generator: Callable,
 ) -> Type:
     """Create a TypedDict from a dictionary literal"""
     # Check if all keys are string literals
@@ -810,7 +930,13 @@ def _create_typed_dict_from_dict(
     for i, key in enumerate(dict_node.keys):
         if isinstance(key, ast.Constant) and isinstance(key.value, str):
             value_type = _infer_expr_type(
-                dict_node.values[i], symbol_table, func, nested_path + [key.value], use_literals
+                dict_node.values[i],
+                symbol_table,
+                func,
+                nested_path + [key.value],
+                use_literals,
+                branch_path,
+                typed_dict_name_generator,
             )
             field_types[key.value] = value_type
         else:
@@ -819,22 +945,33 @@ def _create_typed_dict_from_dict(
 
     if is_valid_typeddict and field_types:
         # Create a dynamic TypedDict class
-        # Capitalize function name and remove underscores
-        class_name = f"{_snake_case_to_capital_case(func.__name__)}Return"
-
-        # Add nested path components
-        for component in nested_path:
-            class_name += _snake_case_to_capital_case(_sanitize_name(component))
+        class_name = typed_dict_name_generator(func, nested_path, branch_path)
         return TypedDict(class_name, field_types)
 
     # If not a valid TypedDict, return a regular Dict with inferred types
     if dict_node.keys:
         key_types = [
-            _infer_expr_type(key, symbol_table, func, nested_path + [key], use_literals)
+            _infer_expr_type(
+                key,
+                symbol_table,
+                func,
+                nested_path + [key],
+                use_literals,
+                branch_path,
+                typed_dict_name_generator,
+            )
             for key in dict_node.keys
         ]
         value_types = [
-            _infer_expr_type(value, symbol_table, func, nested_path, use_literals)
+            _infer_expr_type(
+                value,
+                symbol_table,
+                func,
+                nested_path,
+                use_literals,
+                branch_path,
+                typed_dict_name_generator,
+            )
             for value in dict_node.values
         ]
 

@@ -205,7 +205,7 @@ wheels = [
 
 [[package]]
 name = "type-less"
-version = "0.1.20"
+version = "0.1.22"
 source = { editable = "." }
 
 [package.dev-dependencies]
