@@ -144,7 +144,6 @@ def _default_typed_dict_name_generator(
     for component in nested_path:
         class_name += _snake_case_to_capital_case(_sanitize_name(component))
 
-    class_name += "Return"
     return class_name
 
 
